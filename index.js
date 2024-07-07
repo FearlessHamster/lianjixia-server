@@ -1,6 +1,7 @@
 const WebSocket = require('ws')
 const md5 = require('js-md5')
 const fs = require('fs');
+const { Base64 } = require('js-base64');
 const server = WebSocket.Server
 
 fs.access("./user.json", (err) => {
@@ -164,6 +165,39 @@ wss.on('connection',function(ws){
             }
             const data = JSON.stringify(array)
             ws.send(data);
+        }else if(leftstr(msg,"getservercore")){
+            const core = JSON.parse(fs.readFileSync('./core.json', { encoding: 'utf8' }) ?? "[]");
+
+            const array = {
+                type: 'servercore',
+                msg: 'success',
+                data: core.servercore
+            }
+            const data = JSON.stringify(array)
+            ws.send(data);
+        }else if(leftstr(msg,"getclientcore")){
+            const core = JSON.parse(fs.readFileSync('./core.json', { encoding: 'utf8' }) ?? "[]");
+
+            const array = {
+                type: 'clientcore',
+                msg: 'success',
+                data: core.clientcore
+            }
+            const data = JSON.stringify(array)
+            ws.send(data);
+        }else if(leftstr(msg,"changeinfo")){
+            const args = subargs(msg)
+            const data = JSON.parse(Base64.decode(args[0]))
+            rooms[data.rid].title = data.title
+            rooms[data.rid].dec = data.dec
+            rooms[data.rid].servercore = data.servercore
+            rooms[data.rid].clientcore = data.clientcore
+            const array = {
+                type: 'room',
+                msg: 'success',
+                data: rooms
+            }
+            ws.send(JSON.stringify(array));
         }
     })
 })
