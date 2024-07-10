@@ -1,9 +1,15 @@
-const WebSocket = require('ws')
-const md5 = require('js-md5')
+const md5 = require('js-md5');
+const WebSocket = require('ws');
 const fs = require('fs');
 const server = WebSocket.Server
+const configDir = require('path').resolve(__dirname, 'config');
+const config = {
+    resources: configDir+'/resource.json',
+    users: configDir+'/users.json',
+    cores: configDir+'/cores.json',
+}
 
-fs.access("./user.json", (err) => {
+fs.access(config.users, (err) => {
     if (err) {
       fs.appendFileSync("./user.json", '[]', 'utf-8', (err) => {
         if (err) {
@@ -17,16 +23,52 @@ const wss = new server({
     port: 4000
 })
 
-const user = JSON.parse(fs.readFileSync('./user.json', { encoding: 'utf8' }) ?? "[]");
-for(userKey in user) {
+const user = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
+
+// function getRandomString(length) {
+//     let chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+//     let res = '';
+//     for (let i = 0; i < length; i++) {
+//         res += chars.charAt(Math.floor(Math.random() * chars.length));
+//     }
+//     return res;
+// }
+// for(let i = 0; i < 100; i++) {
+//     const username = getRandomString(10);
+//     const password = getRandomString(16);
+//     if (user.some(element => element.username === username)) {
+//         console.log("Username already exists.");
+//         return false;
+//     }
+
+//     user.push({
+//         rid: user.length,
+//         title: "联机大厅",
+//         img: "",
+//         dec: "房主很懒，什么都没写",
+//         servercore: "null",
+//         clientcore: "null",
+//         maxplayers: 4,
+//         viplevel: 0,
+//         plugins: [],
+//         mods: [],
+//         username: username,
+//         password: md5.md5(password),
+//         xp: 0
+//     })
+// }
+// fs.writeFileSync(config.users, JSON.stringify(user));
+
+for(let userKey in user) {
     delete user[userKey].username;
     delete user[userKey].password;
     delete user[userKey].xp;
     user[userKey].players = [];
 }
+
 let rooms = user;
 
-function sendmsg(ws, type, msg, data) {
+function sendMsg(ws, type, msg, data) {
     const array = {
         type: type,
         msg: msg,
@@ -36,22 +78,21 @@ function sendmsg(ws, type, msg, data) {
 }
 
 wss.on('connection',function(ws){
-    sendmsg(ws, 'connected', 'success', {})
+    sendMsg(ws, 'connected', 'success', {})
     ws.on('message',function(msg){
         msg = msg.toString();
-        console.log(msg);
         let data = JSON.parse(msg);
-        endmsg = 'success';
+        let endMsg = 'success';
         let user = {};
         let core = {};
         let t_data = {};
-        let userjson = {};
+        let userJson = {};
         switch(data.type){
             case 'ping':
-                sendmsg(ws, 'ping', 'pong', {})
+                sendMsg(ws, 'ping', 'pong', {})
                 break;
             case 'login':
-                user = JSON.parse(fs.readFileSync('./user.json', { encoding: 'utf8' }) ?? "[]");
+                user = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
                 
                 for(let userKey in user){
                     if (user[userKey].username === data.data.username && user[userKey].password === md5.md5(data.data.password)) {
@@ -61,19 +102,19 @@ wss.on('connection',function(ws){
                     }
                 }
 
-                for(room in userjson){
-                    userjson[room].players = userjson[room].players.filter(function(item) {
+                for(room in userJson){
+                    userJson[room].players = userJson[room].players.filter(function(item) {
                         return item !== data.data.username
                         });
                 }
                 
                 if(!t_data.username){
-                    endmsg = 'fail'
+                    endMsg = 'fail'
                 }
-                sendmsg(ws, 'login', endmsg, t_data)
+                sendMsg(ws, 'Login', endMsg, t_data)
                 break;
             case 'register':
-                user = JSON.parse(fs.readFileSync('./user.json', { encoding: 'utf8' }) ?? "[]");
+                user = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
                 if (user.some(element => element.username === data.data.username)) {
                     console.log("Username already exists.");
                     return false;
@@ -84,10 +125,16 @@ wss.on('connection',function(ws){
                     title: "联机大厅",
                     img: "",
                     dec: "房主很懒，什么都没写",
-                    servercore: "null",
-                    clientcore: "null",
-                    maxplayers: 4,
-                    viplevel: 0,
+                    ServerCore: {
+                        "name": "",
+                        "version": "",
+                    },
+                    ClientCore: {
+                        "name": "",
+                        "version": "",
+                    },
+                    maxPlayers: 4,
+                    vipLevel: 0,
                     plugins: [],
                     mods: [],
                     username: data.data.username,
@@ -95,9 +142,9 @@ wss.on('connection',function(ws){
                     xp: 0
                 })
                     
-                fs.writeFileSync('./user.json', JSON.stringify(user));
+                fs.writeFileSync(config.users, JSON.stringify(user));
 
-                for(let userKey in user){
+                for(userKey in user){
                     if (user[userKey].username === data.data.username && user[userKey].password === md5.md5(data.data.password)) {
                         t_data.username = user[userKey].username;
                         t_data.rid = userKey;
@@ -105,159 +152,378 @@ wss.on('connection',function(ws){
                     }
                 }
                 if(!t_data.username){
-                    endmsg = 'fail'
+                    endMsg = 'fail'
                 }
-                sendmsg(ws, 'login', endmsg, t_data)
+                sendMsg(ws, 'Login', endMsg, t_data)
                 break;
             case 'join':
                 
-                userjson = JSON.parse(fs.readFileSync('./user.json', { encoding: 'utf8' }) ?? "[]");
-                for(userKey in userjson) {
-                    delete userjson[userKey].username;
-                    delete userjson[userKey].password;
-                    delete userjson[userKey].xp;
-                    userjson[userKey].players = rooms[userKey].players;
-                    if(userjson[userKey].viplevel > 0){
-                        userjson[userKey].maxplayers = userjson[userKey].maxplayers + ((userjson[userKey].viplevel+1) * 10)
+                userJson = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
+                for(userKey in userJson) {
+                    delete userJson[userKey].username;
+                    delete userJson[userKey].password;
+                    delete userJson[userKey].xp;
+                    if(!rooms[userKey]) {
+                        rooms[userKey] = {};
+                    }
+                    if(!rooms[userKey].players){
+                        userJson[userKey].players = []
+                    }else{
+                        for(room in rooms){
+                            if(userJson[userKey].rid === Number(rooms[room].rid)){
+                                userJson[userKey].players = rooms[room].players;
+                            }
+                        }
+                    }
+                    if(userJson[userKey].viplevel > 0){
+                        userJson[userKey].maxplayers = userJson[userKey].maxplayers + ((userJson[userKey].viplevel+1) * 10)
                     }
                 }
-                for(room in userjson){
-                    if(userjson[room].rid == data.data.rid){
-                        if(userjson[room].players.length >= userjson[room].maxplayers){
-                            endmsg = '房间人数已满';
+                for(room in userJson){
+                    if(userJson[room].rid === Number(data.data.rid)){
+                        if(userJson[room].players.length >= userJson[room].maxplayers){
+                            endMsg = '房间人数已满';
                             continue;
                         }
-                        if(userjson[room].players.indexOf(data.data.username) !== -1){
-                            endmsg = '该玩家已在房间内';
+                        if(userJson[room].players.indexOf(data.data.username) !== -1){
+                            endMsg = '该玩家已在房间内';
                             continue;
                         }
-                        userjson[room].players.push(data.data.username)
+                        userJson[room].players.push(data.data.username)
+                        
                         
                     }
                 }
-                rooms = userjson.sort(function(a,b) {
-                    return a.players.length - b.players.length;    
+                rooms = userJson.sort(function(a,b) {
+                    return b.players.length - a.players.length;    
                 });
-                sendmsg(ws, 'room', endmsg, rooms)
+                sendMsg(ws, 'Room', endMsg, rooms)
                 break;
             case 'leave':
-                userjson = JSON.parse(fs.readFileSync('./user.json', { encoding: 'utf8' }) ?? "[]");
-                for(userKey in userjson) {
-                    delete userjson[userKey].username;
-                    delete userjson[userKey].password;
-                    delete userjson[userKey].xp;
-                    userjson[userKey].players = rooms[userKey].players;
-                    if(userjson[userKey].viplevel > 0){
-                        userjson[userKey].maxplayers = userjson[userKey].maxplayers + ((userjson[userKey].viplevel+1) * 10)
+                userJson = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
+                for(userKey in userJson) {
+                    delete userJson[userKey].username;
+                    delete userJson[userKey].password;
+                    delete userJson[userKey].xp;
+                    if(!rooms[userKey]) {
+                        rooms[userKey] = {};
+                    }
+                    if(!rooms[userKey].players){
+                        userJson[userKey].players = []
+                    }else{
+                        for(room in rooms){
+                            if(userJson[userKey].rid === Number(rooms[room].rid)){
+                                userJson[userKey].players = rooms[room].players;
+                            }
+                        }
+                    }
+                    if(userJson[userKey].viplevel > 0){
+                        userJson[userKey].maxplayers = userJson[userKey].maxplayers + ((userJson[userKey].viplevel+1) * 10)
                     }
                 }
                 
-                for(room in userjson){
-                    if(userjson[room].rid == data.data.rid){
-                        if(userjson[room].players.indexOf(data.data.username) === -1){
-                            endmsg = '该玩家已不在房间内'
+                for(room in userJson){
+                    
+                    if(userJson[room].rid === Number(data.data.rid)){
+                        if(userJson[room].players.indexOf(data.data.username) === -1){
+                            endMsg = '该玩家已不在房间内'
                             continue;
                         }
-                        userjson[room].players = userjson[room].players.filter(function(item) {
+                        userJson[room].players = userJson[room].players.filter(function(item) {
                             
                             return item !== data.data.username
                             });
                         
                     }
                 }
-                rooms = userjson.sort(function(a,b) {
-                    return a.players.length - b.players.length;    
+                rooms = userJson.sort(function(a,b) {
+                    return b.players.length - a.players.length;    
                 });
-                sendmsg(ws, 'room', endmsg, rooms)
+                sendMsg(ws, 'Room', endMsg, rooms)
                 break;
-            case 'getroom':
-                userjson = JSON.parse(fs.readFileSync('./user.json', { encoding: 'utf8' }) ?? "[]");
-                for(userKey in userjson) {
-                    delete userjson[userKey].username;
-                    delete userjson[userKey].password;
-                    delete userjson[userKey].xp;
-                    if(rooms[userKey].players){
-                        userjson[userKey].players = rooms[userKey].players;
+            case 'getRoom':
+                userJson = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
+                for(userKey in userJson) {
+                    delete userJson[userKey].username;
+                    delete userJson[userKey].password;
+                    delete userJson[userKey].xp;
+                    if(!rooms[userKey]) {
+                        rooms[userKey] = {};
+                    }
+                    if(!rooms[userKey].players){
+                        userJson[userKey].players = []
                     }else{
-                        userjson[userKey].players = []
+                        for(room in rooms){
+                            if(userJson[userKey].rid === Number(rooms[room].rid)){
+                                userJson[userKey].players = rooms[room].players;
+                            }
+                        }
                     }
 
-                    if(userjson[userKey].viplevel > 0){
-                        userjson[userKey].maxplayers = userjson[userKey].maxplayers + ((userjson[userKey].viplevel+1) * 10)
+                    if(userJson[userKey].viplevel > 0){
+                        userJson[userKey].maxplayers = userJson[userKey].maxplayers + ((userJson[userKey].viplevel+1) * 10)
                     }
                 }
 
-                rooms = userjson.sort(function(a,b) {
-                    return a.players.length - b.players.length;    
+                rooms = userJson.sort(function(a,b) {
+                    return b.players.length - a.players.length;    
                 });
-                sendmsg(ws, 'room', 'success', rooms)
+                sendMsg(ws, 'Room', 'success', rooms)
                 break;
-            case 'changeinfo':
-                userjson = JSON.parse(fs.readFileSync('./user.json', { encoding: 'utf8' }) ?? "[]");
-                for(userKey in userjson) {
-                    delete userjson[userKey].username;
-                    delete userjson[userKey].password;
-                    delete userjson[userKey].xp;
-                    userjson[userKey].players = rooms[userKey].players;
-                    if(userjson[userKey].viplevel > 0){
-                        userjson[userKey].maxplayers = userjson[userKey].maxplayers + ((userjson[userKey].viplevel+1) * 10)
+            case 'changeInfo':
+                userJson = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
+                for(userKey in userJson) {
+                    delete userJson[userKey].username;
+                    delete userJson[userKey].password;
+                    delete userJson[userKey].xp;
+                    if(!rooms[userKey]) {
+                        rooms[userKey] = {};
                     }
-                    if(userjson[userKey].rid == data.data.rid){
-                        userjson[userKey].title = data.data.title
-                        userjson[userKey].dec = data.data.dec
-                        userjson[userKey].servercore = data.data.servercore
-                        userjson[userKey].clientcore = data.data.clientcore
+                    if(!rooms[userKey].players){
+                        userJson[userKey].players = []
+                    }else{
+                        for(room in rooms){
+                            if(userJson[userKey].rid === Number(rooms[room].rid)){
+                                userJson[userKey].players = rooms[room].players;
+                            }
+                        }
+                    }
+                    if(userJson[userKey].viplevel > 0){
+                        userJson[userKey].maxplayers = userJson[userKey].maxplayers + ((userJson[userKey].viplevel+1) * 10)
+                    }
+                    if(userJson[userKey].rid === Number(data.data.rid)){
+                        userJson[userKey].title = data.data.title
+                        userJson[userKey].dec = data.data.dec
+                        userJson[userKey].servercore = data.data.servercore
+                        userJson[userKey].clientcore = data.data.clientcore
                     }
                 }
-                rooms = userjson.sort(function(a,b) {
-                    return a.players.length - b.players.length;    
+                rooms = userJson.sort(function(a,b) {
+                    return b.players.length - a.players.length;    
                 });
-                userjson = JSON.parse(fs.readFileSync('./user.json', { encoding: 'utf8' }) ?? "[]");
-                for(userKey in userjson) {
-                    if(userjson[userKey].rid == data.data.rid){
-                        userjson[userKey].title = data.data.title
-                        userjson[userKey].dec = data.data.dec
-                        userjson[userKey].servercore = data.data.servercore
-                        userjson[userKey].clientcore = data.data.clientcore
+                userJson = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
+                for(userKey in userJson) {
+                    if(userJson[userKey].rid === Number(data.data.rid)){
+                        userJson[userKey].title = data.data.title
+                        userJson[userKey].dec = data.data.dec
+                        userJson[userKey].servercore = data.data.servercore
+                        userJson[userKey].clientcore = data.data.clientcore
                     }
                 }
-                fs.writeFileSync('./user.json',JSON.stringify(userjson))
-                sendmsg(ws, 'room', 'success', rooms)
+                fs.writeFileSync(config.users,JSON.stringify(userJson))
+                sendMsg(ws, 'Room', 'success', rooms)
                 break;
-            case 'getservercore':
-                core = JSON.parse(fs.readFileSync('./core.json', { encoding: 'utf8' }) ?? "[]");
-                sendmsg(ws, 'servercore', 'success', core.servercore)
+            case 'getServerCore':
+                core = JSON.parse(fs.readFileSync(config.cores, { encoding: 'utf8' }) ?? "[]");
+                sendMsg(ws, 'ServerCore', 'success', core.servercore)
                 break;
-            case 'getclientcore':
-                core = JSON.parse(fs.readFileSync('./core.json', { encoding: 'utf8' }) ?? "[]");
-                sendmsg(ws, 'clientcore', 'success', core.clientcore)
+            case 'getClientCore':
+                core = JSON.parse(fs.readFileSync(config.cores, { encoding: 'utf8' }) ?? "[]");
+                sendMsg(ws, 'ClientCore', 'success', core.clientcore)
                 break;
-            case 'uploadimg':
-                userjson = JSON.parse(fs.readFileSync('./user.json', { encoding: 'utf8' }) ?? "[]");
-                for(userKey in userjson) {
-                    delete userjson[userKey].username;
-                    delete userjson[userKey].password;
-                    delete userjson[userKey].xp;
-                    userjson[userKey].players = rooms[userKey].players;
-                    if(userjson[userKey].viplevel > 0){
-                        userjson[userKey].maxplayers = userjson[userKey].maxplayers + ((userjson[userKey].viplevel+1) * 10)
+            case 'uploadImg':
+                userJson = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
+                for(userKey in userJson) {
+                    delete userJson[userKey].username;
+                    delete userJson[userKey].password;
+                    delete userJson[userKey].xp;
+                    if(!rooms[userKey]) {
+                        rooms[userKey] = {};
                     }
-                    if(userjson[userKey].rid == data.data.rid){
-                        userjson[userKey].img = data.data.img
+                    if(!rooms[userKey].players){
+                        userJson[userKey].players = []
+                    }else{
+                        for(room in rooms){
+                            if(userJson[userKey].rid === Number(rooms[room].rid)){
+                                userJson[userKey].players = rooms[room].players;
+                            }
+                        }
+                    }
+                    if(userJson[userKey].viplevel > 0){
+                        userJson[userKey].maxplayers = userJson[userKey].maxplayers + ((userJson[userKey].viplevel+1) * 10)
+                    }
+                    if(userJson[userKey].rid === Number(data.data.rid)){
+                        userJson[userKey].img = data.data.img
                     }
                 }
-                rooms = userjson.sort(function(a,b) {
-                    return a.players.length - b.players.length;    
+                rooms = userJson.sort(function(a,b) {
+                    return b.players.length - a.players.length;    
                 });
 
-                userjson = JSON.parse(fs.readFileSync('./user.json', { encoding: 'utf8' }) ?? "[]");
-                for(userKey in userjson) {
-                    if(userjson[userKey].rid == data.data.rid){
-                        userjson[userKey].img = data.data.img
+                userJson = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
+                for(userKey in userJson) {
+                    if(userJson[userKey].rid === Number(data.data.rid)){
+                        userJson[userKey].img = data.data.img
                     }
                 }
-                fs.writeFileSync('./user.json',JSON.stringify(userjson))
-                sendmsg(ws, 'room', 'success', rooms)
+                fs.writeFileSync(config.users,JSON.stringify(userJson))
+                sendMsg(ws, 'Room', 'success', rooms)
+                break;
+            case 'getResource':
+                res = JSON.parse(fs.readFileSync(config.resources, { encoding: 'utf8' })?? "[]");
+                sendMsg(ws, 'Resource', 'success', res)
+                break;
+            case 'addPlugin':
+                userJson = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
+                for(userKey in userJson) {
+                    delete userJson[userKey].username;
+                    delete userJson[userKey].password;
+                    delete userJson[userKey].xp;
+                    if(!rooms[userKey]) {
+                        rooms[userKey] = {};
+                    }
+                    if(!rooms[userKey].players){
+                        userJson[userKey].players = []
+                    }else{
+                        for(room in rooms){
+                            if(userJson[userKey].rid === Number(rooms[room].rid)){
+                                userJson[userKey].players = rooms[room].players;
+                            }
+                        }
+                    }
+                    if(userJson[userKey].viplevel > 0){
+                        userJson[userKey].maxplayers = userJson[userKey].maxplayers + ((userJson[userKey].viplevel+1) * 10)
+                    }
+                    if(userJson[userKey].rid === Number(data.data.rid)){
+                        userJson[userKey].plugins.push(data.data.plugin)
+                    }
+                }
+                rooms = userJson.sort(function(a,b) {
+                    return b.players.length - a.players.length;
+                });
+
+                userJson = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
+                for(userKey in userJson) {
+                    if(userJson[userKey].rid === Number(data.data.rid)){
+                        userJson[userKey].plugins.push(data.data.plugin)
+                    }
+                }
+                fs.writeFileSync(config.users,JSON.stringify(userJson))
+                sendMsg(ws, 'Room', 'success', rooms)
+                break;
+            case 'delPlugin':
+                userJson = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
+                for(userKey in userJson) {
+                    delete userJson[userKey].username;
+                    delete userJson[userKey].password;
+                    delete userJson[userKey].xp;
+                    if(!rooms[userKey]) {
+                        rooms[userKey] = {};
+                    }
+                    if(!rooms[userKey].players){
+                        userJson[userKey].players = []
+                    }else{
+                        for(room in rooms){
+                            if(userJson[userKey].rid === Number(rooms[room].rid)){
+                                userJson[userKey].players = rooms[room].players;
+                            }
+                        }
+                    }
+                    if(userJson[userKey].viplevel > 0){
+                        userJson[userKey].maxplayers = userJson[userKey].maxplayers + ((userJson[userKey].viplevel+1) * 10)
+                    }
+                    if(userJson[userKey].rid === Number(data.data.rid)){
+                        userJson[userKey].plugins = userJson[userKey].plugins.filter(function(item) {
+                            return item.name !== data.data.plugin.name
+                        });
+                        console.log(userJson[userKey].plugins);
+                    }
+                }
+                rooms = userJson.sort(function(a,b) {
+                    return b.players.length - a.players.length;
+                });
+
+                userJson = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
+                for(userKey in userJson) {
+                    if(userJson[userKey].rid === Number(data.data.rid)){
+                        userJson[userKey].plugins = userJson[userKey].plugins.filter(function(item) {
+                            return item.name !== data.data.plugin.name
+                        });
+                    }
+                }
+                fs.writeFileSync(config.users,JSON.stringify(userJson))
+                sendMsg(ws, 'Room', 'success', rooms)
+                break;
+            case 'addMod':
+                userJson = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
+                for(userKey in userJson) {
+                    delete userJson[userKey].username;
+                    delete userJson[userKey].password;
+                    delete userJson[userKey].xp;
+                    if(!rooms[userKey]) {
+                        rooms[userKey] = {};
+                    }
+                    if(!rooms[userKey].players){
+                        userJson[userKey].players = []
+                    }else{
+                        for(room in rooms){
+                            if(userJson[userKey].rid === Number(rooms[room].rid)){
+                                userJson[userKey].players = rooms[room].players;
+                            }
+                        }
+                    }
+                    if(userJson[userKey].viplevel > 0){
+                        userJson[userKey].maxplayers = userJson[userKey].maxplayers + ((userJson[userKey].viplevel+1) * 10)
+                    }
+                    if(userJson[userKey].rid === Number(data.data.rid)){
+                        userJson[userKey].mods.push(data.data.mod)
+                    }
+                }
+                rooms = userJson.sort(function(a,b) {
+                    return b.players.length - a.players.length;
+                });
+
+                userJson = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
+                for(userKey in userJson) {
+                    if(userJson[userKey].rid === Number(data.data.rid)){
+                        userJson[userKey].mods.push(data.data.mod)
+                    }
+                }
+                fs.writeFileSync(config.users,JSON.stringify(userJson))
+                sendMsg(ws, 'Room', 'success', rooms)
+                break;
+            case 'delMod':
+                userJson = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
+                for(userKey in userJson) {
+                    delete userJson[userKey].username;
+                    delete userJson[userKey].password;
+                    delete userJson[userKey].xp;
+                    if(!rooms[userKey]) {
+                        rooms[userKey] = {};
+                    }
+                    if(!rooms[userKey].players){
+                        userJson[userKey].players = []
+                    }else{
+                        for(room in rooms){
+                            if(userJson[userKey].rid === Number(rooms[room].rid)){
+                                userJson[userKey].players = rooms[room].players;
+                            }
+                        }
+                    }
+                    if(userJson[userKey].viplevel > 0){
+                        userJson[userKey].maxplayers = userJson[userKey].maxplayers + ((userJson[userKey].viplevel+1) * 10)
+                    }
+                    if(userJson[userKey].rid === Number(data.data.rid)){
+                        userJson[userKey].mods = userJson[userKey].mods.filter(function(item) {
+                            return item.name !== data.data.mod.name
+                        });
+                        console.log(userJson[userKey].mods);
+                    }
+                }
+                rooms = userJson.sort(function(a,b) {
+                    return b.players.length - a.players.length;
+                });
+
+                userJson = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");
+                for(userKey in userJson) {
+                    if(userJson[userKey].rid === Number(data.data.rid)){
+                        userJson[userKey].mods = userJson[userKey].mods.filter(function(item) {
+                            return item.name !== data.data.mod.name
+                        });
+                    }
+                }
+                fs.writeFileSync(config.users,JSON.stringify(userJson))
+                sendMsg(ws, 'Room', 'success', rooms)
                 break;
             default: break;
 

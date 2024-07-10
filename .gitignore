@@ -10,7 +10,7 @@ user.json
 core.json
 
 node_modules
-
+servers
 
 .vscode/*
 !.vscode/extensions.json
