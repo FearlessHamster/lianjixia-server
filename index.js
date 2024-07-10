@@ -315,11 +315,11 @@ wss.on('connection',function(ws){
                 break;
             case 'getServerCore':
                 core = JSON.parse(fs.readFileSync(config.cores, { encoding: 'utf8' }) ?? "[]");
-                sendMsg(ws, 'ServerCore', 'success', core.servercore)
+                sendMsg(ws, 'ServerCore', 'success', core.ServerCore)
                 break;
             case 'getClientCore':
                 core = JSON.parse(fs.readFileSync(config.cores, { encoding: 'utf8' }) ?? "[]");
-                sendMsg(ws, 'ClientCore', 'success', core.clientcore)
+                sendMsg(ws, 'ClientCore', 'success', core.ClientCore)
                 break;
             case 'uploadImg':
                 userJson = JSON.parse(fs.readFileSync(config.users, { encoding: 'utf8' }) ?? "[]");

@@ -1,5 +1,5 @@
 {
-    "servercore": [
+    "ServerCore": [
         {
             "name": "spigot 1.12.2",
             "version": "1.12.2"
@@ -9,7 +9,7 @@
             "version": "1.20.1"
         }
     ],
-    "clientcore": [
+    "ClientCore": [
         {
             "name": "forge 1.12.2",
             "version": "1.12.2"
